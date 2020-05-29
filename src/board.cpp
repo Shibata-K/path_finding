@@ -2,17 +2,56 @@
 
 bool Board::find(const Point& start, const Point& goal)
 {
-	mass_[start.y()][start.x()].setStatus(Mass::START);
-	mass_[goal.y()][goal.x()].setStatus(Mass::GOAL);
+	Mass& mass_start = getMass(start);
+	Mass& mass_goal = getMass(goal);
 
-	Point p = start;
-	while (p != goal) {
-		if (p != start) mass_[p.x()][p.y()].setStatus(Mass::WAYPOINT);
+	mass_start.setStatus(Mass::status::START);
+	mass_goal.setStatus(Mass::status::GOAL);
 
-		if (p.x() < goal.x()) { p.setX(p.x() + 1); continue; }
-		if (goal.x() < p.x()) { p.setX(p.x() - 1); continue; }
-		if (p.y() < goal.y()) { p.setY(p.y() + 1); continue; }
-		if (goal.y() < p.y()) { p.setY(p.y() - 1); continue; }
+	// オープンリストに開始ノードを追加する
+	open_list_.clear();
+	open_list_.push_back(&mass_start);
+
+	while (!open_list_.empty()) {
+		std::sort(open_list_.begin(), open_list_.end(), asc);
+		auto it = open_list_.begin();
+		Mass* current = *it;
+		if (current->getStatus() == Mass::status::GOAL) {
+			Mass* p = current;
+			while (p) 
+			{ 
+				if (p->getStatus() == Mass::status::BLANK ||
+					p->getStatus() == Mass::status::WATER || 
+					p->getStatus() == Mass::status::ROAD )
+					p->setStatus(Mass::status::WAYPOINT);
+				p = p->getParent(); 
+			}
+			return true;
+		}
+		else {
+			open_list_.erase(it);
+			current->setListed(Mass::listed::CLOSE);
+
+			const Point& pos = current->getPos();
+			Point next[4] = { pos.getRight(),pos.getLeft(),pos.getUp(),pos.getDown() };
+			for (auto& c : next)
+			{
+				if (c.x() < 0 || BOARD_SIZE <= c.x())
+					continue;
+				if (c.y() < 0 || BOARD_SIZE <= c.y())
+					continue;
+
+				Mass& m = getMass(c);
+				if (!m.isListed(Mass::listed::OPEN) &&
+					!m.isListed(Mass::listed::CLOSE) &&
+					m.getStatus() != Mass::status::WALL) {
+
+					open_list_.push_back(&m);
+					m.setParent(current, goal);
+					m.setListed(Mass::listed::OPEN);
+				}
+			}
+		}
 	}
 
 	return false;
@@ -33,25 +72,25 @@ void Board::show() const
 		for (int x = 0; x < BOARD_SIZE; x++) {
 			std::cout << "|";
 			switch (mass_[y][x].getStatus()) {
-			case Mass::BLANK:
+			case Mass::status::BLANK:
 				std::cout << " ";
 				break;
-			case Mass::START:
+			case Mass::status::START:
 				std::cout << "S";
 				break;
-			case Mass::GOAL:
+			case Mass::status::GOAL:
 				std::cout << "G";
 				break;
-			case Mass::WAYPOINT:
+			case Mass::status::WAYPOINT:
 				std::cout << "o";
 				break;
-			case Mass::WALL:
+			case Mass::status::WALL:
 				std::cout << "#";
 				break;
-			case Mass::WATER:
+			case Mass::status::WATER:
 				std::cout << "~";
 				break;
-			case Mass::ROAD:
+			case Mass::status::ROAD:
 				std::cout << "$";
 				break;
 			}
